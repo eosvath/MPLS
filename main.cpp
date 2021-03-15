@@ -6,7 +6,13 @@ int main()
 {
     Graph<int> mpls("data/graph.in");
     Graph<int> mpls_removed = mpls.clone();
-    mpls_removed.remove_node(2);
+    try{
+        mpls_removed.remove_link(2,7);
+    }
+    catch(const char* msg)
+    {
+        std::cout<<"Error! "<<msg<<'\n';
+    }
 
     mpls.R_F_W();
     mpls_removed.R_F_W();

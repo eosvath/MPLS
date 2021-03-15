@@ -27,7 +27,7 @@ public:
     void print_graph_dists() const;
     void print_graph_nexts() const;
     void remove_node(int);
-    /*remove_weight(int,int);*/
+    void remove_link(int,int);
 
 };
 
@@ -266,9 +266,24 @@ void Graph<T>::remove_node(int node)
             _nexts[node][i] = -1;
         }
     }
+    else{
+        throw "Invalid node index to remove!";
+    }
 }
 
-
+template <typename T>
+void Graph<T>::remove_link(int node1, int node2)
+{
+    if(node1>=0 && node1<_nr_of_nodes && node2>=0 && node2<_nr_of_nodes)
+    {
+        _weights[node2][node1]=_weights[node1][node2]=0;
+        _nexts[node1][node2] = -1;
+        _nexts[node2][node1] = -1;
+    }
+    else{
+        throw "Invalid node index in link to remove!";
+    }
+}
 
 #endif // GRAPH
 
