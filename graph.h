@@ -28,6 +28,8 @@ public:
     void print_graph_nexts() const;
     void remove_node(int);
     void remove_link(int,int);
+    template <typename T2>
+    void friend check_changed_paths(const Graph<T2> &graph1, const Graph<T2> &graph2);
 
 };
 
@@ -282,6 +284,61 @@ void Graph<T>::remove_link(int node1, int node2)
     }
     else{
         throw "Invalid node index in link to remove!";
+    }
+}
+
+template <typename T>
+void check_changed_paths(const Graph<T> &graph1, const Graph<T> &graph2){
+    for(int i=0; i<graph1._nr_of_nodes; ++i)
+    {
+        for(int j=i+1; j<graph2._nr_of_nodes; ++j)
+        {
+            if(graph1._paths[i][j].size() && graph2._paths[i][j].size())
+            {
+                if(graph1._paths[i][j] != graph2._paths[i][j])
+                {
+                    std::cout<<std::endl<<"i = "<<i+1<<", j = "<<j+1<<std::endl;
+                    //copy new route
+                    std::vector<int> differing_path = graph2._paths[i][j];
+                    int k=0, rerouting_node, reroute_destination_node;
+                    //delete common part with the old part from the beginning, remember last common node from beginning of new path
+                    for(; graph1._paths[i][j][k] == graph2._paths[i][j][k] ; rerouting_node = differing_path[0], differing_path.erase(differing_path.begin()), k++);
+                    //delete common part with the old part from the end, remember first common node from end of new path
+                    for(k=1; graph1._paths[i][j][graph1._paths[i][j].size()-k] == graph2._paths[i][j][graph2._paths[i][j].size()-k] && differing_path.size() > 0; reroute_destination_node = differing_path[differing_path.size()], differing_path.erase(differing_path.end()-1),++k);
+                    //std::cout<<rerouting_node<<std::endl;
+                    for(auto it:differing_path)
+                    {
+                        std::cout<<it+1<<' ';
+                    }
+                    //std::cout<<std::endl<<reroute_destination_node<<std::endl;
+                    std::cout<<std::endl;
+                    k=0;
+                    differing_path.insert(differing_path.begin(),rerouting_node);
+                    int counter=0, index = differing_path.size();
+                    while(index >= 0)
+                    {
+                        if( graph1._paths[differing_path[index]][reroute_destination_node] == graph2._paths[differing_path[index]][reroute_destination_node])
+                        {
+                            index--;
+                            continue;
+                        }
+                        else{
+                            if(index+1<differing_path.size())
+                            {
+                                std::cout<<differing_path[index+1]+1<<". reroutes to "<<reroute_destination_node+1<<std::endl;
+                                reroute_destination_node = differing_path[index+1];
+                                ++counter;
+                            }
+                            else{
+                                throw "This theoretically should never happen!";
+                            }
+                        }
+                    }
+                    std::cout<<differing_path[index+1]+1<<". reroutes to "<<reroute_destination_node+1<<std::endl;
+                    std::cout<<"Number of labels required: "<<counter<<std::endl;
+                }
+            }
+        }
     }
 }
 

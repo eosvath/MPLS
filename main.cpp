@@ -7,7 +7,7 @@ int main()
     Graph<int> mpls("data/graph.in");
     Graph<int> mpls_removed = mpls.clone();
     try{
-        mpls_removed.remove_link(2,7);
+        mpls_removed.remove_node(2);
     }
     catch(const char* msg)
     {
@@ -19,10 +19,15 @@ int main()
 
     mpls.print_paths();
     std::cout<<std::endl;
-    mpls_removed.print_graph_nexts();
-    std::cout<<std::endl;
     mpls_removed.print_paths();
 
+    try{
+        check_changed_paths<int>(mpls, mpls_removed);
+    }
+    catch(const char* msg)
+    {
+        std::cout<<"Error! "<<msg<<'\n';
+    }
 
     return 0;
 }
