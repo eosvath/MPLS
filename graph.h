@@ -9,36 +9,114 @@
 
 template <typename T>
 class Graph{
+    /***
+    * Data member storing the number of nodes in a graph
+    */
     int _nr_of_nodes;
+
+    /***
+    * Data member storing the distance (weights) between two adjacent nodes
+    */
     std::vector<std::vector<T>> _weights;
+
+    /***
+    * Data member used to build up the shortest paths between the nodes
+    */
     std::vector<std::vector<int>> _nexts;
+    /***
+    * Ddata member used to store the shortest paths between nodes
+    */
     std::vector<std::vector<std::vector<int>>> _paths;
-    Graph();
+
+    //Graph();
+    /***
+     *   member function used by R_F_W() to generate the contents of _paths data member when shortest distances and _nexts are caluculated by the modified Roy-Floyd-Warshall algorithm
+    */
     void get_paths();
 public:
-    Graph(const char *);
+    /***
+    *   Constructor getting an input file_name as const char* and reading the _nr_of_nodes and weights.
+    *   @param file_name as const char*
+    */
+    Graph(const char * input_file);
+    /***
+    * Copy constructor
+    */
     Graph(const Graph<T>& );
+
+    /***
+    * Move constructor
+    */
     Graph(Graph<T>&& rhs) noexcept;
+
+    /***
+    * Member function returning a clone of the current object.
+    */
     Graph clone() const;
+
+    /***
+    * Copy assignment operator
+    */
     Graph<T>& operator=(const Graph<T>& rhs);
+
+    /***
+    * Move assignment operator
+    */
     Graph<T>& operator=(Graph<T>&& rhs) noexcept;
+
+    /***
+    * Roy-Floyd-Warshall algorithm, finding the shortest distances and paths in the current graph object.
+    * Modifies, all data members except _nr_of_nodes.
+    */
     void R_F_W();
-    void print_paths();
+
+    /***
+    * Function printing the paths between each node in a human readable format.
+    * NOTE!: in memory node numbers are stored indexing from 0. When printed, these numbers are increased with one.
+    */
+    void print_paths() const;
+
+    /***
+    * Function printing the contents of _weigths data member.
+    */
     void print_graph_dists() const;
+
+    /***
+    * Function printing the contents of _nexts data member.
+    */
     void print_graph_nexts() const;
+
+    /***
+    * Removes all links connected with node given in @param
+    * @param node to remove from graph (removes only links connected with the node)
+    */
     void remove_node(int);
+
+    /***
+    * Removes a single link from the graph. The link is determined using the @params, which determine the nodes the link connects to.
+    *
+    * Both parameter has to be between 0 (>=) and _nr_of_nodes (<).
+    *
+    * @param node1 - endpoint one of the link to remove
+    * @param node2 - endpoint two of the link to remove
+    */
     void remove_link(int,int);
+
+    /***
+    * Friend function that given 2 graphs determines the difference in the shortest paths.
+    * Only those differences will be printed where a path exists.
+    * When determined the different path, the function determines with an iteratively, how many labels are required in the graph1 to get the shortest path in graph2.
+    * When finished it prints the number of labels needed, and the nodes that help in rerouting.
+    *
+    * NOTE!: This method should be called after R_F_W() was called on both graphs, because it uses the _paths data member, which is configured in that function.
+    *
+    * WARNING!: The difference is checked comparing graph2 to graph1, so here the order of the parameters counts, since it will generate a different output.
+    *
+    */
     template <typename T2>
     void friend check_changed_paths(const Graph<T2> &graph1, const Graph<T2> &graph2);
 
 };
-
-template <typename T>
-Graph<T>::Graph()
-{
-    std::cout<<"empty-ctor\n";
-    _nr_of_nodes = 0;
-}
 
 template <typename T>
 Graph<T>::Graph(const char * input_file)
@@ -79,7 +157,7 @@ Graph<T>::Graph(const char * input_file)
 template <typename T>
 Graph<T>::Graph(const Graph<T>& rhs)
 {
-    std::cout<<"cpy-ctor\n";
+    //std::cout<<"cpy-ctor\n";
     _nr_of_nodes = rhs._nr_of_nodes;
     _weights.resize(_nr_of_nodes);
     _nexts.resize(_nr_of_nodes);
@@ -106,7 +184,7 @@ Graph<T> Graph<T>::clone() const
 template <typename T>
 Graph<T>::Graph(Graph<T>&& rhs) noexcept
 {
-    std::cout<<"move-ctor\n";
+    //std::cout<<"move-ctor\n";
     _nr_of_nodes = std::move(rhs._nr_of_nodes);
     _weights.resize(_nr_of_nodes);
     _nexts.resize(_nr_of_nodes);
@@ -240,7 +318,7 @@ void Graph<T>::get_paths()
 }
 
 template <class T>
-void Graph<T>::print_paths()
+void Graph<T>::print_paths() const
 {
     for(int i=0; i<_paths.size(); ++i)
     {
