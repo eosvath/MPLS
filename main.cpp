@@ -6,6 +6,9 @@ int main()
 {
     //Load graph from file
     Graph<int> mpls("data/graph.in");
+
+    mpls.draw("graph.png");
+
     //Copy graph loaded from file
     Graph<int> mpls_removed = mpls.clone();
     //Try to remove a node from copied graph

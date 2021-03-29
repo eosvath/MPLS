@@ -6,7 +6,9 @@
 #include <iostream>
 #include <utility>
 #include <memory>
-
+extern "C" {
+#include <graphviz/gvc.h>
+}
 template <typename T>
 class Graph{
     /***
@@ -115,6 +117,8 @@ public:
     */
     template <typename T2>
     void friend check_changed_paths(const Graph<T2> &graph1, const Graph<T2> &graph2);
+
+    void draw(char *fname) const;
 
 };
 
@@ -418,6 +422,44 @@ void check_changed_paths(const Graph<T> &graph1, const Graph<T> &graph2){
             }
         }
     }
+}
+
+template <typename T>
+void Graph<T>::draw(char *fname) const
+{
+    Agraph_t *g;
+    std::vector<Agnode_t*> nodes;
+
+    /* set up a graphviz context - but only once even for multiple graphs */
+    static GVC_t *gvc;
+
+  	gvc = gvContext();
+
+    /* Create a simple digraph */
+    g = agopen((char*)"g", Agdirected, 0);
+    nodes.resize(_nr_of_nodes);
+    for(int i=0; i<_nr_of_nodes; ++i)
+    {
+        nodes[i] = agnode(g, &std::to_string(i+1)[0], 1);
+    }
+    for (int i = 0; i < _nr_of_nodes; i++)
+        for (int j = 0; j < _nr_of_nodes; j++)
+            if(_weights[i][j])
+            {
+                Agedge_t *e=agedge(g, nodes[i], nodes[j], (char*)"", 1);
+                agsafeset(e, "label", &std::to_string(_weights[i][j])[0], "");
+            }
+
+   /* Use the directed graph layout engine */
+    gvLayout(gvc, g, (char*)"neato");
+
+    /* Output in .dot format */
+    gvRenderFilename(gvc, g, (char*)"png", fname);
+
+    gvFreeLayout(gvc, g);
+
+    agclose(g);
+
 }
 
 #endif // GRAPH
