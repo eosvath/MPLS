@@ -137,36 +137,48 @@ template <typename T>
 Graph<T>::Graph(const char * input_file)
 {
 
-    std::ifstream fin(input_file);
-    fin>>_nr_of_nodes;
-    _weights.resize(_nr_of_nodes);
-    _nexts.resize(_nr_of_nodes);
-    _paths.resize(_nr_of_nodes);
-    for(int i=0; i<_nr_of_nodes; ++i)
+    std::ifstream fin;
+    fin.exceptions ( std::ifstream::failbit | std::ifstream::badbit );
+    try
     {
-        _weights[i].resize(_nr_of_nodes);
-        _nexts[i].resize(_nr_of_nodes);
-        _paths[i].resize(_nr_of_nodes);
-        for(int j=0; j<_nr_of_nodes; ++j)
+        fin.open (input_file);
+        fin>>_nr_of_nodes;
+        _weights.resize(_nr_of_nodes);
+        _nexts.resize(_nr_of_nodes);
+        _paths.resize(_nr_of_nodes);
+        for(int i=0; i<_nr_of_nodes; ++i)
         {
-            fin>>_weights[i][j];
-            if(_weights[i][j])
+            _weights[i].resize(_nr_of_nodes);
+            _nexts[i].resize(_nr_of_nodes);
+            _paths[i].resize(_nr_of_nodes);
+            for(int j=0; j<_nr_of_nodes; ++j)
             {
-                _nexts[i][j]=j;
-            }
-            else
-            {
-                if(i==j)
+                fin>>_weights[i][j];
+                if(_weights[i][j])
                 {
                     _nexts[i][j]=j;
                 }
                 else
                 {
-                    _nexts[i][j]=-1;
+                    if(i==j)
+                    {
+                        _nexts[i][j]=j;
+                    }
+                    else
+                    {
+                        _nexts[i][j]=-1;
+                    }
                 }
             }
         }
+        fin.close();
     }
+    catch (std::ifstream::failure e)
+    {
+        std::cerr << "Exception opening/reading/closing file\n";
+        exit(EXIT_FAILURE);
+    }
+
 }
 
 template <typename T>
@@ -495,7 +507,7 @@ void Graph<T>::draw(const char *fname) const
     /* set up a graphviz context - but only once even for multiple graphs */
     static GVC_t *gvc;
 
-  	gvc = gvContext();
+    gvc = gvContext();
 
     /* Create a simple digraph */
     g = agopen((char*)"g", Agdirected, 0);
@@ -512,7 +524,7 @@ void Graph<T>::draw(const char *fname) const
                 agsafeset(e, "label", &std::to_string(_weights[i][j])[0], "");
             }
 
-   /* Use the directed graph layout engine */
+    /* Use the directed graph layout engine */
     gvLayout(gvc, g, (char*)"neato");
 
     /* Output in .dot format */

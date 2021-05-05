@@ -3,17 +3,32 @@
 #include "include/stats.h"
 using namespace std;
 
-int main()
+std::string replaceExt(std::string s, std::string newExt) {
+
+   std::string::size_type i = s.rfind('.', s.length());
+
+   if (i != std::string::npos) {
+      s.replace(i+1, newExt.length(), newExt);
+   }
+   return s;
+}
+
+int main(int argc, char *argv[])
 {
+    if(argc!=2)
+    {
+        std::cout<<"Usage: MPLS {INPUT_FILE_NAME}\n";
+        exit(EXIT_FAILURE);
+    }
+
     //Load graph from file
-    std::string input_file = "data/graph_old";
-    Graph<int> mpls_original((input_file+".in").c_str());
+    Graph<int> mpls_original(argv[1]);
 
     Statistics stats;
     stats.reset();
     bool quiet = true;
 
-    mpls_original.draw((input_file+".png").c_str());
+    mpls_original.draw(replaceExt(argv[1],"png").c_str());
 
     for(int i=0;i<mpls_original.get_nr_of_nodes();++i)
     {

@@ -37,7 +37,8 @@
 			<Add option="-fexceptions" />
 		</Compiler>
 		<Unit filename="data/graph.in" />
-		<Unit filename="graph.h" />
+		<Unit filename="include/graph.h" />
+		<Unit filename="include/stats.h" />
 		<Unit filename="main.cpp" />
 		<Extensions />
 	</Project>
