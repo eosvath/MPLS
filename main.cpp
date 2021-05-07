@@ -15,9 +15,9 @@ std::string replaceExt(std::string s, std::string newExt) {
 
 int main(int argc, char *argv[])
 {
-    if(argc!=2)
+    if(argc!=2 && argc !=3)
     {
-        std::cout<<"Usage: MPLS {INPUT_FILE_NAME}\n";
+        std::cout<<"Usage: MPLS {INPUT_FILE_NAME} [--quiet=false]\n";
         exit(EXIT_FAILURE);
     }
 
@@ -29,9 +29,16 @@ int main(int argc, char *argv[])
     Statistics stats;
     stats.reset();
     bool quiet = true;
-
+    if(argc==3)
+    {
+        if(std::string(argv[2])=="--quiet=false")
+        {
+            quiet = false;
+        }
+    }
     mpls_original.draw(replaceExt(argv[1],"png").c_str());
 
+    std::cout<<"Node protection statistics:";
     for(int i=0;i<mpls_original.get_nr_of_nodes();++i)
     {
         Graph<int> mpls_removed = mpls_original.clone();
@@ -63,8 +70,9 @@ int main(int argc, char *argv[])
     }
 
     stats.print_stats();
-
     stats.reset();
+
+    std::cout<<"\nLink protection statistics:";
     for(int i=0;i<mpls_original.get_nr_of_nodes()-1;++i)
     {
         for(int j=i+1;j<mpls_original.get_nr_of_nodes();++j)
