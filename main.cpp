@@ -13,6 +13,16 @@ std::string replaceExt(std::string s, std::string newExt) {
    return s;
 }
 
+std::string setSubDir(std::string s, std::string subDir) {
+
+   std::string::size_type i = s.rfind('/', s.length());
+
+   if (i != std::string::npos) {
+      s.insert(i+1, subDir);
+   }
+   return s;
+}
+
 int main(int argc, char *argv[])
 {
     if(argc!=2 && argc !=3)
@@ -24,10 +34,7 @@ int main(int argc, char *argv[])
     //Load graph from file
     Graph<int> mpls_original(argv[1]);
     Graph<int> mpls = mpls_original.clone();
-    mpls.R_F_W();
 
-    Statistics stats;
-    stats.reset();
     bool quiet = true;
     if(argc==3)
     {
@@ -37,77 +44,13 @@ int main(int argc, char *argv[])
         }
     }
     mpls_original.draw(replaceExt(argv[1],"png").c_str());
+    mpls.R_F_W(setSubDir(argv[1],"res/"));
 
-    std::cout<<"Node protection statistics:";
-    for(int i=0;i<mpls_original.get_nr_of_nodes();++i)
-    {
-        Graph<int> mpls_removed = mpls_original.clone();
-        //Try to remove a node from copied graph
-        try{
-            mpls_removed.remove_node(i);
-        }
-        catch(const char* msg)
-        {
-            std::cout<<"Error! "<<msg<<'\n';
-        }
-        //Determine the shortest distances and paths
-        mpls_removed.R_F_W();
+    cout<<mpls.get_secondary_stats()<<"%"<<endl;
 
-        //Print the shortest paths calculated in both graphs, in a human readable format
-        if(!quiet)
-        {
-            mpls.print_paths();
-            std::cout<<std::endl;
-            mpls_removed.print_paths();
-        }
-        try{
-            check_changed_paths_TI_LFA<int>(mpls, mpls_removed, stats, quiet);
-        }
-        catch(const char* msg)
-        {
-            std::cout<<"Error! "<<msg<<'\n';
-        }
-    }
+    mpls.print_graph_nexts();
 
-    stats.print_stats();
-    stats.reset();
-
-    std::cout<<"\nLink protection statistics:";
-    for(int i=0;i<mpls_original.get_nr_of_nodes()-1;++i)
-    {
-        for(int j=i+1;j<mpls_original.get_nr_of_nodes();++j)
-        {
-            //Copy graph loaded from file
-            Graph<int> mpls_removed = mpls_original.clone();
-            //Try to remove a node from copied graph
-            try{
-                mpls_removed.remove_link(i,j);
-            }
-            catch(const char* msg)
-            {
-                std::cout<<"Error! "<<msg<<'\n';
-            }
-            //Determine the shortest distances and paths
-            mpls_removed.R_F_W();
-
-            //Print the shortest paths calculated in both graphs, in a human readable format
-            if(!quiet)
-            {
-                mpls.print_paths();
-                std::cout<<std::endl;
-                mpls_removed.print_paths();
-            }
-            try{
-
-                check_changed_paths_TI_LFA<int>(mpls, mpls_removed, stats, quiet);
-            }
-            catch(const char* msg)
-            {
-                std::cout<<"Error! "<<msg<<'\n';
-            }
-        }
-    }
-    stats.print_stats();
+    mpls.print_paths();
 
     return 0;
 }

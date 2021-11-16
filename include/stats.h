@@ -3,7 +3,7 @@
 
 #include <iostream>
 
-class Statistics
+class LabelStatistics
 {
     int total;
     int number_of_labels_needed[6];
@@ -46,6 +46,22 @@ class Statistics
             std::cout<<((double)number_of_labels_needed[i])/total*100<<"% ";
         }
         std::cout<<std::endl;
+    }
+};
+
+class Statistics
+{
+    int total_true=0, out_of=0;
+public:
+    void add(bool to_be_counted)
+    {
+        if(to_be_counted)
+            total_true++;
+        out_of++;
+    }
+    double get_stats()
+    {
+        return static_cast<double>(total_true)/out_of*100;
     }
 };
 

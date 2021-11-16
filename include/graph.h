@@ -4,14 +4,19 @@
 #include <vector>
 #include <fstream>
 #include <iostream>
+#include <sstream>
 #include <utility>
 #include <memory>
+#include <climits>
 
 #include "stats.h"
 
 extern "C" {
 #include <graphviz/gvc.h>
 }
+
+using namespace std;
+
 template <typename T>
 class Graph
 {
@@ -20,25 +25,28 @@ class Graph
     */
     int _nr_of_nodes;
 
+    Statistics secondary_not_exist_stats;
+
     /***
     * Data member storing the distance (weights) between two adjacent nodes
     */
-    std::vector<std::vector<T>> _weights;
+    vector<vector<T>> _weights;
 
     /***
     * Data member used to build up the shortest paths between the nodes
     */
-    std::vector<std::vector<int>> _nexts;
-    /***
-    * Ddata member used to store the shortest paths between nodes
-    */
-    std::vector<std::vector<std::vector<int>>> _paths;
+    vector<vector<int>> _nexts_primary;
+    vector<vector<int>> _nexts_secondary;
 
-    //Graph();
     /***
      *   member function used by R_F_W() to generate the contents of _paths data member when shortest distances and _nexts are caluculated by the modified Roy-Floyd-Warshall algorithm
     */
     void get_paths();
+
+    int minDistance(int dist[], bool sptSet[]);
+
+    vector<int> dijkstra(int src, int dest);
+
 public:
     /***
     *   Constructor getting an input file_name as const char* and reading the _nr_of_nodes and weights.
@@ -74,7 +82,7 @@ public:
     * Roy-Floyd-Warshall algorithm, finding the shortest distances and paths in the current graph object.
     * Modifies, all data members except _nr_of_nodes.
     */
-    void R_F_W();
+    void R_F_W(string);
     /***
     * Function returning the number of nodes in a graph.
     */
@@ -126,56 +134,64 @@ public:
     * WARNING!: The difference is checked comparing graph2 to graph1, so here the order of the parameters counts, since it will generate a different output.
     *
     */
-    template <typename T2>
-    void friend check_changed_paths_TI_LFA(const Graph<T2> &graph1, const Graph<T2> &graph2, Statistics &stats, const bool &quiet);
+//    template <typename T2>
+//    void friend check_changed_paths_TI_LFA(const Graph<T2> &graph1, const Graph<T2> &graph2, Statistics &stats, const bool &quiet);
+
+    void get_paths_between_only_primary(int i, int j, vector<int> &path) const;
+
+    void get_paths_between_only_secondary(int i, int j, vector<int> &path) const;
 
     void draw(const char *fname) const;
+
+    double get_secondary_stats();
 
 };
 
 template <typename T>
 Graph<T>::Graph(const char * input_file)
 {
-
-    std::ifstream fin;
-    fin.exceptions ( std::ifstream::failbit | std::ifstream::badbit );
+    ifstream fin;
+    fin.exceptions ( ifstream::failbit | ifstream::badbit );
     try
     {
         fin.open (input_file);
         fin>>_nr_of_nodes;
         _weights.resize(_nr_of_nodes);
-        _nexts.resize(_nr_of_nodes);
-        _paths.resize(_nr_of_nodes);
+        _nexts_primary.resize(_nr_of_nodes);
+        _nexts_secondary.resize(_nr_of_nodes);
         for(int i=0; i<_nr_of_nodes; ++i)
         {
             _weights[i].resize(_nr_of_nodes);
-            _nexts[i].resize(_nr_of_nodes);
-            _paths[i].resize(_nr_of_nodes);
+            _nexts_primary[i].resize(_nr_of_nodes);
+            _nexts_secondary[i].resize(_nr_of_nodes);
             for(int j=0; j<_nr_of_nodes; ++j)
             {
                 fin>>_weights[i][j];
                 if(_weights[i][j])
                 {
-                    _nexts[i][j]=j;
+                    _nexts_primary[i][j]=j;
+                    _nexts_secondary[i][j]=j;
                 }
                 else
                 {
                     if(i==j)
                     {
-                        _nexts[i][j]=j;
+                        _nexts_primary[i][j]=j;
+                        _nexts_secondary[i][j]=j;
                     }
                     else
                     {
-                        _nexts[i][j]=-1;
+                        _nexts_primary[i][j]=-1;
+                        _nexts_secondary[i][j]=-1;
                     }
                 }
             }
         }
         fin.close();
     }
-    catch (std::ifstream::failure e)
+    catch (ifstream::failure e)
     {
-        std::cerr << "Exception opening/reading/closing file\n";
+        cerr << "Exception opening/reading/closing file\n";
         exit(EXIT_FAILURE);
     }
 
@@ -184,48 +200,38 @@ Graph<T>::Graph(const char * input_file)
 template <typename T>
 Graph<T>::Graph(const Graph<T>& rhs)
 {
-    //std::cout<<"cpy-ctor\n";
+    //cout<<"cpy-ctor\n";
     _nr_of_nodes = rhs._nr_of_nodes;
     _weights.resize(_nr_of_nodes);
-    _nexts.resize(_nr_of_nodes);
-    _paths.resize(rhs._paths.size());
+    _nexts_primary.resize(_nr_of_nodes);
+    _nexts_secondary.resize(_nr_of_nodes);
     for(int i=0; i<_nr_of_nodes ; ++i)
     {
-
         _weights[i]=rhs._weights[i];
-        _nexts[i]=rhs._nexts[i];
-        _paths[i].resize(rhs._paths[i].size());
-        for(int j=0; j<_paths[i].size() ; ++j)
-        {
-            _paths[i][j]=rhs._paths[i][j];
-        }
+        _nexts_primary[i]=rhs._nexts_primary[i];
+        _nexts_secondary[i]=rhs._nexts_secondary[i];
     }
 }
 
 template <typename T>
 Graph<T> Graph<T>::clone() const
 {
-    return std::move(Graph<T>(*this));
+    return move(Graph<T>(*this));
 }
 
 template <typename T>
 Graph<T>::Graph(Graph<T>&& rhs) noexcept
 {
-    //std::cout<<"move-ctor\n";
-    _nr_of_nodes = std::move(rhs._nr_of_nodes);
+    //cout<<"move-ctor\n";
+    _nr_of_nodes = move(rhs._nr_of_nodes);
     _weights.resize(_nr_of_nodes);
-    _nexts.resize(_nr_of_nodes);
-    _paths.resize(_nr_of_nodes);
+    _nexts_primary.resize(_nr_of_nodes);
+    _nexts_secondary.resize(_nr_of_nodes);
     for(int i=0; i<_nr_of_nodes ; ++i)
     {
-        _weights[i] = std::move(rhs._weights[i]);
-        _nexts[i] = std::move(rhs._nexts[i]);
-
-        _paths[i].resize(rhs._paths[i].size());
-        for(int j=0; j<_paths[i].size(); ++j)
-        {
-            _paths[i][j]=std::move(rhs._paths[i][j]);
-        }
+        _weights[i] = move(rhs._weights[i]);
+        _nexts_primary[i] = move(rhs._nexts_primary[i]);
+        _nexts_secondary[i] = move(rhs._nexts_secondary[i]);
     }
 }
 
@@ -236,43 +242,51 @@ void Graph<T>::print_graph_dists() const
     {
         for(int j=0; j<_nr_of_nodes ; ++j)
         {
-            std::cout<<_weights[i][j]<<' ';
+            cout<<_weights[i][j]<<' ';
         }
-        std::cout<<std::endl;
+        cout<<endl;
     }
 }
 
 template <typename T>
 void Graph<T>::print_graph_nexts() const
 {
+    cout<<"Primary outgoing interfaces: "<<endl;
     for(int i=0; i<_nr_of_nodes ; ++i)
     {
         for(int j=0; j<_nr_of_nodes ; ++j)
         {
-            std::cout<<_nexts[i][j]<<' ';
+            cout<<_nexts_primary[i][j]+1<<' ';
         }
-        std::cout<<std::endl;
+        cout<<endl;
     }
+    cout<<endl<<"Secondary outgoing interfaces: "<<endl;
+
+    for(int i=0; i<_nr_of_nodes ; ++i)
+    {
+        for(int j=0; j<_nr_of_nodes ; ++j)
+        {
+            cout<<_nexts_secondary[i][j]+1<<' ';
+        }
+        cout<<endl;
+    }
+    cout<<endl;
 }
 
 
 template <typename T>
 Graph<T>& Graph<T>:: operator=(const Graph<T>& rhs)
 {
-    std::cout<<"cpy-assignment-op\n";
+//    cout<<"cpy-assignment-op\n";
     _nr_of_nodes = rhs._nr_of_nodes;
     _weights.resize(_nr_of_nodes);
-    _nexts.resize(_nr_of_nodes);
-    _paths.resize(_nr_of_nodes);
+    _nexts_primary.resize(_nr_of_nodes);
+    _nexts_secondary.resize(_nr_of_nodes);
     for(int i=0; i<_nr_of_nodes ; ++i)
     {
         _weights[i] = rhs._weights[i];
-        _nexts[i] = rhs._nexts[i];
-        _paths[i].resize(rhs._paths[i].size());
-        for(int j=0; j<_paths[i][j].size(); ++j)
-        {
-            _paths[i][j]=rhs._paths[i][j];
-        }
+        _nexts_primary[i] = rhs._nexts[i];
+        _nexts_secondary[i] = rhs._nexts[i];
     }
     return *this;
 }
@@ -280,28 +294,25 @@ Graph<T>& Graph<T>:: operator=(const Graph<T>& rhs)
 template <typename T>
 Graph<T>& Graph<T>:: operator=(Graph<T>&& rhs) noexcept
 {
-    std::cout<<"move-assignment-op\n";
-    _nr_of_nodes = std::move(rhs._nr_of_nodes);
+//    cout<<"move-assignment-op\n";
+    _nr_of_nodes = move(rhs._nr_of_nodes);
     _weights.resize(_nr_of_nodes);
-    _nexts.resize(_nr_of_nodes);
-    _paths.resize(_nr_of_nodes);
+    _nexts_primary.resize(_nr_of_nodes);
+    _nexts_secondary.resize(_nr_of_nodes);
     for(int i=0; i<_nr_of_nodes ; ++i)
     {
-        _weights[i] = std::move(rhs._weights[i]);
-        _nexts[i] = std::move(rhs._nexts[i]);
-        _paths[i].resize(rhs._paths[i].size());
-        for(int j=0; j< rhs._paths[i].size(); ++j)
-        {
-            _paths[i][j] = std::move(rhs._paths[i][j]);
-        }
+        _weights[i] = move(rhs._weights[i]);
+        _nexts_primary[i] = move(rhs._nexts_primary[i]);
+        _nexts_secondary[i] = move(rhs._nexts_secondary[i]);
     }
 
     return *this;
 }
 
 template <typename T>
-void Graph<T>::R_F_W()
+void Graph<T>::R_F_W(string in_path)
 {
+    Graph<int> clone_original(this->clone());
     for (int k = 0; k < _nr_of_nodes; k++)
     {
         for (int i = 0; i < _nr_of_nodes; i++)
@@ -313,56 +324,229 @@ void Graph<T>::R_F_W()
                     if ((_weights[i][k] + _weights[k][j] < _weights[i][j] ||  !_weights[i][j]) && ( _weights[i][k] && _weights[k][j]))
                     {
                         _weights[i][j] = _weights[i][k] + _weights[k][j];
-                        _nexts[i][j]=_nexts[i][k];
+                        _nexts_primary[i][j]=_nexts_primary[i][k];
                     }
                 }
             }
         }
     }
-    get_paths();
-}
 
-template <class T>
-void Graph<T>::get_paths()
-{
-    _paths.resize(_nr_of_nodes);
-    for(int i=0; i<_nr_of_nodes; ++i)
+    for (int i = 0; i < _nr_of_nodes - 1; i++)
     {
-        _paths[i].resize(_nr_of_nodes);
-        for(int j=0; j<_nr_of_nodes; ++j)
+        for (int j = i+1; j < _nr_of_nodes; j++)
         {
-            _paths[i][j].resize(0);
-            int k=i;
-            while(k!=j && _nexts[k][j]>=0)
+            string path(in_path);
+            Graph<int> clone(clone_original.clone());
+            vector<int> shortest_path{};
+            get_paths_between_only_primary(i, j, shortest_path);
+            for(int l=0; l < shortest_path.size()-1; l++)
             {
-                _paths[i][j].push_back(k);
-                k=_nexts[k][j];
+                if(l!=0)
+                {
+                    clone.remove_node(shortest_path[l]);
+                }
+                clone.remove_link(shortest_path[l], shortest_path[l+1]);
             }
-            if(_nexts[k][j]>=0)
+            vector<int> secondary(clone.dijkstra(i,j));
+            if(secondary.empty())
             {
-                _paths[i][j].push_back(k);
+                clone = clone_original.clone();
+                clone.remove_link(shortest_path[0], shortest_path[1]);
+                secondary = clone.dijkstra(i,j);
+                secondary_not_exist_stats.add(true);
             }
+            else
+            {
+                secondary_not_exist_stats.add(false);
+            }
+            if(!secondary.empty())
+            {
+                _nexts_secondary[i][j] = secondary[1];
+                _nexts_secondary[j][i] = secondary[secondary.size()-2];
+            }
+//            else
+//            {
+//                cout<<"!!!BIG PROBLEM!!!"<<endl;
+//            }
+            stringstream ss;
+            ss<<'_'<<i+1<<'_'<<j+1;
+
+            string::size_type index = path.rfind('.', path.length());
+            if (index != string::npos)
+            {
+                path.insert(index, ss.str());
+            }
+            clone.draw(path.c_str());
         }
     }
 }
 
+template <typename T>
+double Graph<T>::get_secondary_stats()
+{
+    return secondary_not_exist_stats.get_stats();
+}
+
+// A utility function to find the
+// vertex with minimum distance
+// value, from the set of vertices
+// not yet included in shortest
+// path tree
+template <typename T>
+int Graph<T>::minDistance(int dist[], bool sptSet[])
+{
+
+    // Initialize min value
+    int min = INT_MAX, min_index;
+
+    for (int v = 0; v < _nr_of_nodes; v++)
+    {
+        if (sptSet[v] == false && dist[v] <= min)
+        {
+            min = dist[v];
+            min_index = v;
+        }
+    }
+    return min_index;
+}
+
+template <typename T>
+vector<int> Graph<T>::dijkstra(int src, int dest)
+{
+
+    // The output array. dist[i]
+    // will hold the shortest
+    // distane from src to i
+    int dist[_nr_of_nodes];
+
+    // sptSet[i] will true if vertex
+    // i is included / in shortest
+    // path tree or shortest distance
+    // from src to i is finalized
+    bool sptSet[_nr_of_nodes];
+
+    // Parent array to store
+    // shortest path tree
+    int parent[_nr_of_nodes];
+
+    // Initialize all distances as
+    // INFINITE and stpSet[] as false
+    for (int i = 0; i < _nr_of_nodes; i++)
+    {
+        parent[i] = -1;
+        dist[i] = INT_MAX;
+        sptSet[i] = false;
+    }
+
+    // Distance of source vertex
+    // from itself is always 0
+    dist[src] = 0;
+
+    // Find shortest path
+    // for all vertices
+    for (int count = 0; count < _nr_of_nodes - 1; count++)
+    {
+        // Pick the minimum distance
+        // vertex from the set of
+        // vertices not yet processed.
+        // u is always equal to src
+        // in first iteration.
+        int u = minDistance(dist, sptSet);
+
+        // Mark the picked vertex
+        // as processed
+        sptSet[u] = true;
+
+        // Update dist value of the
+        // adjacent vertices of the
+        // picked vertex.
+        for (int v = 0; v < _nr_of_nodes; v++)
+
+            // Update dist[v] only if is
+            // not in sptSet, there is
+            // an edge from u to v, and
+            // total weight of path from
+            // src to v through u is smaller
+            // than current value of
+            // dist[v]
+            if (!sptSet[v] && _weights[u][v] &&
+                dist[u] + _weights[u][v] < dist[v])
+            {
+                parent[v] = u;
+                dist[v] = dist[u] + _weights[u][v];
+            }
+    }
+    vector<int> res{};
+    int end = dest;
+    while(end!=src && end!=-1)
+    {
+        res.insert(res.begin(), end);
+        end = parent[end];
+    }
+    if(end!=-1)
+    {
+        res.insert(res.begin(), src);
+    }
+    else
+    {
+        res.clear();
+    }
+    return res;
+}
+
+
+template <class T>
+void Graph<T>::get_paths_between_only_primary(int i, int j, vector<int> &path) const
+{
+    path.push_back(i);
+    if(i!=j)
+    {
+        get_paths_between_only_primary(_nexts_primary[i][j], j, path);
+    }
+}
+
+template <class T>
+void Graph<T>::get_paths_between_only_secondary(int i, int j, vector<int> &path) const
+{
+    path.push_back(i);
+    if(i!=j)
+    {
+        if(_nexts_secondary[_nexts_secondary[i][j]][j] != i)
+        {
+            get_paths_between_only_secondary(_nexts_secondary[i][j], j, path);
+        }
+        else
+        {
+            get_paths_between_only_primary(_nexts_secondary[i][j], j, path);
+        }
+    }
+}
+
+
 template <class T>
 void Graph<T>::print_paths() const
 {
-    for(int i=0; i<_paths.size(); ++i)
+    for (int i = 0; i < _nr_of_nodes - 1; i++)
     {
-        for(int j=0; j<_paths.size(); ++j)
+        for (int j = i+1; j < _nr_of_nodes; j++)
         {
-            if(i!=j)
-            {
-                std::cout<<i+1<<".->"<<j+1<<". : ";
-                for(int k=0; k<_paths[i][j].size(); ++k)
-                {
-                    std::cout<<_paths[i][j][k]+1<<' ';
-                }
-                std::cout<<std::endl;
-            }
+            std::vector<int> a{};
+            get_paths_between_only_primary(i,j,a);
 
+            for(int k : a)
+            {
+                cout<<k+1<<' ';
+            }
+            cout<<endl;
+
+            a.clear();
+            get_paths_between_only_secondary(i,j,a);
+
+            for(int k : a)
+            {
+                cout<<k+1<<' ';
+            }
+            cout<<endl<<endl;
         }
     }
 }
@@ -375,8 +559,10 @@ void Graph<T>::remove_node(int node)
         for(int i=0; i<_nr_of_nodes; ++i)
         {
             _weights[i][node]=_weights[node][i]=0;
-            _nexts[i][node] = -1;
-            _nexts[node][i] = -1;
+            _nexts_primary[i][node] = -1;
+            _nexts_primary[node][i] = -1;
+            _nexts_secondary[i][node] = -1;
+            _nexts_secondary[node][i] = -1;
         }
     }
     else
@@ -391,8 +577,10 @@ void Graph<T>::remove_link(int node1, int node2)
     if(node1>=0 && node1<_nr_of_nodes && node2>=0 && node2<_nr_of_nodes)
     {
         _weights[node2][node1]=_weights[node1][node2]=0;
-        _nexts[node1][node2] = -1;
-        _nexts[node2][node1] = -1;
+        _nexts_primary[node1][node2] = -1;
+        _nexts_primary[node2][node1] = -1;
+        _nexts_secondary[node1][node2] = -1;
+        _nexts_secondary[node2][node1] = -1;
     }
     else
     {
@@ -401,108 +589,10 @@ void Graph<T>::remove_link(int node1, int node2)
 }
 
 template <typename T>
-void check_changed_paths_TI_LFA(const Graph<T> &graph1, const Graph<T> &graph2, Statistics &stats, const bool &quiet)
-{
-    for(int i=0; i<graph2._nr_of_nodes; ++i)
-    {
-        for(int j=0; j<graph2._nr_of_nodes; ++j)
-        {
-            if(i!=j)
-            {
-                if(graph1._paths[i][j].size() && graph2._paths[i][j].size())
-                {
-                    if(graph1._paths[i][j] != graph2._paths[i][j])
-                    {
-                        /*
-                        for(auto it:graph1._paths[i][j])
-                        {
-                            std::cout<<it+1<<' ';
-                        }
-                        std::cout<<std::endl;
-                        for(auto it:graph2._paths[i][j])
-                        {
-                            std::cout<<it+1<<' ';
-                        }
-                        std::cout<<std::endl;
-                        */
-                        std::vector<int> differing_path = graph1._paths[i][j];
-                        int path_index = 0;
-                        int last_ok = differing_path[path_index];
-                        while (graph2._paths[differing_path[path_index]][differing_path[path_index+1]].size()==2)
-                        {
-                            last_ok = differing_path[++path_index];
-                        }
-
-                        for (int k = 0; k < graph2._paths[last_ok][j].size(); ++k)
-                        {
-                            if( ++path_index < differing_path.size())
-                            {
-                                differing_path[path_index] = graph2._paths[last_ok][j][k];
-                            }
-                            else
-                            {
-                                differing_path.emplace_back(graph2._paths[last_ok][j][k]);
-                            }
-                        }
-                        int counter = 0;
-                        std::vector<int> sub_path = graph2._paths[last_ok][j];
-
-                        if(!quiet)
-                        {
-                            std::cout<<std::endl<<"i = "<<i+1<<", j = "<<j+1<<std::endl;
-                            for(auto it:sub_path)
-                            {
-                                std::cout<<it+1<<' ';
-                            }
-                            std::cout<<std::endl;
-                        }
-                        int last_dest = sub_path[sub_path.size()-1];
-                        bool null_segment = false;
-
-                        for (int k = sub_path.size()-2; k >= 0; --k)
-                        {
-                            if(graph1._paths[sub_path[k]][last_dest] != graph2._paths[sub_path[k]][last_dest])
-                            {
-                                if(k == 0 && counter == 0)
-                                {
-                                    if(!quiet)
-                                        std::cout<<"0 segment! Sending packet to "<<last_dest+1<<" from node "<<sub_path[0]+1<<" via node "<<sub_path[1]+1<<std::endl;
-                                    null_segment = true;
-                                    break;
-                                }
-                                else
-                                {
-                                    if(k!=0)
-                                    {
-                                        if(!quiet)
-                                            std::cout<<sub_path[k+1]+1<<". reroutes to "<<last_dest+1<<"."<<std::endl;
-                                        ++counter;
-                                        last_dest = sub_path[k+1];
-                                    }
-                                }
-                            }
-                        }
-                        if(!quiet)
-                        {
-                            if(!null_segment)
-                            {
-                                std::cout<<sub_path[0]+1<<". reroutes to "<<last_dest+1<<"."<<std::endl;
-                            }
-                            std::cout<<"Number of labels required: "<<counter<<std::endl;
-                        }
-                        stats.increase_labels_needed(counter);
-                    }
-                }
-            }
-        }
-    }
-}
-
-template <typename T>
 void Graph<T>::draw(const char *fname) const
 {
     Agraph_t *g;
-    std::vector<Agnode_t*> nodes;
+    vector<Agnode_t*> nodes;
 
     /* set up a graphviz context - but only once even for multiple graphs */
     static GVC_t *gvc;
@@ -514,14 +604,14 @@ void Graph<T>::draw(const char *fname) const
     nodes.resize(_nr_of_nodes);
     for(int i=0; i<_nr_of_nodes; ++i)
     {
-        nodes[i] = agnode(g, &std::to_string(i+1)[0], 1);
+        nodes[i] = agnode(g, &to_string(i+1)[0], 1);
     }
     for (int i = 0; i < _nr_of_nodes; i++)
         for (int j = 0; j < _nr_of_nodes; j++)
             if(_weights[i][j])
             {
                 Agedge_t *e=agedge(g, nodes[i], nodes[j], (char*)"", 1);
-                agsafeset(e, "label", &std::to_string(_weights[i][j])[0], "");
+                agsafeset(e, "label", &to_string(_weights[i][j])[0], "");
             }
 
     /* Use the directed graph layout engine */
