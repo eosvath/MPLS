@@ -1,3 +1,10 @@
+/**
+* @file graph.h
+* @Copyrigth Ericsson Ltd. © 2021
+* @author egon.csaba.osvath@ericsson.com
+*/
+
+
 #ifndef GRAPH
 #define GRAPH
 
@@ -16,6 +23,8 @@ extern "C" {
 }
 
 using namespace std;
+
+extern inline void print_path(const vector <int> &path);
 
 template <typename T>
 class Graph
@@ -139,13 +148,26 @@ public:
 
     void get_paths_between_only_primary(int i, int j, vector<int> &path) const;
 
-    void get_paths_between_only_secondary(int i, int j, vector<int> &path) const;
+    void get_paths_between_secondary(int i, int j, vector<int> &path) const;
+
+    void get_paths_between(int i, int j, vector<int> &path) const;
+
+    void print_same_paths() const;
 
     void draw(const char *fname) const;
 
     double get_secondary_stats();
 
+    T get_weight(int i, int j);
+
 };
+
+template <typename T>
+T Graph<T>::get_weight(int i, int j)
+{
+    return _weights[i][j];
+}
+
 
 template <typename T>
 Graph<T>::Graph(const char * input_file)
@@ -313,17 +335,18 @@ template <typename T>
 void Graph<T>::R_F_W(string in_path)
 {
     Graph<int> clone_original(this->clone());
+    vector<vector<int>>weights=_weights;
     for (int k = 0; k < _nr_of_nodes; k++)
     {
         for (int i = 0; i < _nr_of_nodes; i++)
         {
             for (int j = 0; j < _nr_of_nodes; j++)
             {
-                if(i!=j)
+                if(i!=j&& k!=i)
                 {
-                    if ((_weights[i][k] + _weights[k][j] < _weights[i][j] ||  !_weights[i][j]) && ( _weights[i][k] && _weights[k][j]))
+                    if ((weights[i][k] + weights[k][j] < weights[i][j] ||  !weights[i][j]) && (weights[i][k] && weights[k][j]))
                     {
-                        _weights[i][j] = _weights[i][k] + _weights[k][j];
+                        weights[i][j] = weights[i][k] + weights[k][j];
                         _nexts_primary[i][j]=_nexts_primary[i][k];
                     }
                 }
@@ -331,52 +354,55 @@ void Graph<T>::R_F_W(string in_path)
         }
     }
 
-    for (int i = 0; i < _nr_of_nodes - 1; i++)
+    for (int i = 0; i < _nr_of_nodes; i++)
     {
-        for (int j = i+1; j < _nr_of_nodes; j++)
+        for (int j = 0; j < _nr_of_nodes; j++)
         {
-            string path(in_path);
-            Graph<int> clone(clone_original.clone());
-            vector<int> shortest_path{};
-            get_paths_between_only_primary(i, j, shortest_path);
-            for(int l=0; l < shortest_path.size()-1; l++)
+            if(i!=j)
             {
-                if(l!=0)
+                string path(in_path);
+                Graph<int> clone(clone_original.clone());
+                vector<int> shortest_path{};
+                get_paths_between_only_primary(i, j, shortest_path);
+                for(int l=0; l < shortest_path.size()-1; l++)
                 {
-                    clone.remove_node(shortest_path[l]);
+                    if(l!=0)
+                    {
+                        clone.remove_node(shortest_path[l]);
+                    }
+                    clone.remove_link(shortest_path[l], shortest_path[l+1]);
                 }
-                clone.remove_link(shortest_path[l], shortest_path[l+1]);
+                vector<int> secondary(clone.dijkstra(i,j));
+                if(secondary.empty())
+                {
+                    clone = clone_original.clone();
+                    clone.remove_link(shortest_path[0], shortest_path[1]);
+                    secondary = clone.dijkstra(i,j);
+                    secondary_not_exist_stats.add(true);
+                }
+                else
+                {
+                    secondary_not_exist_stats.add(false);
+                }
+//                print_path(secondary);
+                if(!secondary.empty() && secondary.size() >= 2)
+                {
+                    _nexts_secondary[i][j] = secondary[1];
+                }
+//                else
+//                {
+//                    cout<<"!!!BIG PROBLEM!!!"<<endl;
+//                }
+//                stringstream ss;
+//                ss<<'_'<<i+1<<'_'<<j+1;
+//
+//                string::size_type index = path.rfind('.', path.length());
+//                if (index != string::npos)
+//                {
+//                    path.insert(index, ss.str());
+//                }
+//                clone.draw(path.c_str());
             }
-            vector<int> secondary(clone.dijkstra(i,j));
-            if(secondary.empty())
-            {
-                clone = clone_original.clone();
-                clone.remove_link(shortest_path[0], shortest_path[1]);
-                secondary = clone.dijkstra(i,j);
-                secondary_not_exist_stats.add(true);
-            }
-            else
-            {
-                secondary_not_exist_stats.add(false);
-            }
-            if(!secondary.empty())
-            {
-                _nexts_secondary[i][j] = secondary[1];
-                _nexts_secondary[j][i] = secondary[secondary.size()-2];
-            }
-//            else
-//            {
-//                cout<<"!!!BIG PROBLEM!!!"<<endl;
-//            }
-            stringstream ss;
-            ss<<'_'<<i+1<<'_'<<j+1;
-
-            string::size_type index = path.rfind('.', path.length());
-            if (index != string::npos)
-            {
-                path.insert(index, ss.str());
-            }
-            clone.draw(path.c_str());
         }
     }
 }
@@ -506,22 +532,51 @@ void Graph<T>::get_paths_between_only_primary(int i, int j, vector<int> &path) c
 }
 
 template <class T>
-void Graph<T>::get_paths_between_only_secondary(int i, int j, vector<int> &path) const
+void Graph<T>::get_paths_between_secondary(int i, int j, vector<int> &path) const
 {
     path.push_back(i);
     if(i!=j)
     {
         if(_nexts_secondary[_nexts_secondary[i][j]][j] != i)
         {
-            get_paths_between_only_secondary(_nexts_secondary[i][j], j, path);
+            get_paths_between_secondary(_nexts_secondary[i][j], j, path);
         }
         else
         {
-            get_paths_between_only_primary(_nexts_secondary[i][j], j, path);
+            get_paths_between(_nexts_secondary[i][j], j, path);
         }
     }
 }
 
+template <class T>
+void Graph<T>::get_paths_between(int i, int j, vector<int> &path) const
+{
+    int last = -1;
+    if(path.size()>0)
+    {
+        last = path.back();
+    }
+
+    path.push_back(i);
+    if(i!=j)
+    {
+        if(_nexts_primary[i][j]!=-1)
+        {
+            get_paths_between(_nexts_primary[i][j], j, path);
+        }
+        else
+        {
+            if(_nexts_secondary[_nexts_secondary[i][j]][j] != i)
+            {
+                get_paths_between_secondary(_nexts_secondary[i][j], j, path);
+            }
+            else
+            {
+                get_paths_between(_nexts_secondary[i][j], j, path);
+            }
+        }
+    }
+}
 
 template <class T>
 void Graph<T>::print_paths() const
@@ -530,6 +585,7 @@ void Graph<T>::print_paths() const
     {
         for (int j = i+1; j < _nr_of_nodes; j++)
         {
+            cout<<i+1<<"->"<<j+1<<endl;
             std::vector<int> a{};
             get_paths_between_only_primary(i,j,a);
 
@@ -540,13 +596,38 @@ void Graph<T>::print_paths() const
             cout<<endl;
 
             a.clear();
-            get_paths_between_only_secondary(i,j,a);
+            get_paths_between_secondary(i,j,a);
 
             for(int k : a)
             {
                 cout<<k+1<<' ';
             }
             cout<<endl<<endl;
+        }
+    }
+}
+
+template <class T>
+void Graph<T>::print_same_paths() const
+{
+    for (int i = 0; i < _nr_of_nodes - 1; i++)
+    {
+        for (int j = i+1; j < _nr_of_nodes; j++)
+        {
+            std::vector<int> a{};
+            get_paths_between_only_primary(i,j,a);
+
+            std::vector<int> b{};
+            get_paths_between_secondary(i,j,b);
+
+            if(a==b)
+            {
+                for(int k : b)
+                {
+                    cout<<k+1<<' ';
+                }
+                cout<<endl<<endl;
+            }
         }
     }
 }
@@ -558,11 +639,17 @@ void Graph<T>::remove_node(int node)
     {
         for(int i=0; i<_nr_of_nodes; ++i)
         {
-            _weights[i][node]=_weights[node][i]=0;
-            _nexts_primary[i][node] = -1;
-            _nexts_primary[node][i] = -1;
-            _nexts_secondary[i][node] = -1;
-            _nexts_secondary[node][i] = -1;
+            for(int j=0; j<_nr_of_nodes; ++j)
+            {
+                if(i!=j)
+                {
+                    if(_nexts_primary[i][j] == node)
+                    {
+                        _weights[i][j]=_weights[j][i]=0;
+                        _nexts_primary[i][j] = -1;
+                    }
+                }
+            }
         }
     }
     else
@@ -577,10 +664,17 @@ void Graph<T>::remove_link(int node1, int node2)
     if(node1>=0 && node1<_nr_of_nodes && node2>=0 && node2<_nr_of_nodes)
     {
         _weights[node2][node1]=_weights[node1][node2]=0;
-        _nexts_primary[node1][node2] = -1;
-        _nexts_primary[node2][node1] = -1;
-        _nexts_secondary[node1][node2] = -1;
-        _nexts_secondary[node2][node1] = -1;
+        for(int i=0;i<_nr_of_nodes;i++)
+        {
+            if(_nexts_primary[node1][i] == node2)
+            {
+                _nexts_primary[node1][i] = -1;
+            }
+            if(_nexts_primary[node2][i] == node1)
+            {
+                _nexts_primary[node2][i] = -1;
+            }
+        }
     }
     else
     {

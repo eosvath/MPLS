@@ -1,3 +1,9 @@
+/**
+* @file main.cpp
+* @Copyrigth Ericsson Ltd. © 2021
+* @author egon.csaba.osvath@ericsson.com
+*/
+
 #include <iostream>
 #include "include/graph.h"
 #include "include/stats.h"
@@ -21,6 +27,14 @@ std::string setSubDir(std::string s, std::string subDir) {
       s.insert(i+1, subDir);
    }
    return s;
+}
+
+inline void print_path(const vector <int> &path){
+    for (int i:path)
+    {
+        cout<<i+1<<' ';
+    }
+    cout<<endl;
 }
 
 int main(int argc, char *argv[])
@@ -50,7 +64,74 @@ int main(int argc, char *argv[])
 
     mpls.print_graph_nexts();
 
-    mpls.print_paths();
+    Statistics linkStats;
+    for(int i=0; i<mpls_original.get_nr_of_nodes()-1; i++)
+    {
+        for(int j=i+1; j<mpls_original.get_nr_of_nodes();j++)
+        {
+            if(mpls.get_weight(i,j))
+            {
+                Graph<int> clone = mpls.clone();
+                clone.remove_link(i,j);
+
+                cout<<endl<<"Link "<<i+1<<"->"<<j+1<<" removed: "<<endl;
+
+                for(int k=0;k<clone.get_nr_of_nodes()-1;k++)
+                {
+                    for(int l=k+1; l<clone.get_nr_of_nodes();l++)
+                    {
+                        vector<int> path{};
+                        clone.get_paths_between(k, l, path);
+                        if(path.empty())
+                        {
+                            linkStats.add(true);
+                            cout<<"NO PATH FOUND between: "<<k+1<<"->"<<l+1<<" when link: "<<i+1<<"->"<<j+1<<" removed!";
+                        }
+                        else
+                        {
+                            linkStats.add(false);
+                            print_path(path);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    cout<<"Link outage stats: "<<linkStats.get_stats()<<"%"<<endl<<endl;
+
+    Statistics nodeStats;
+    for(int i=0;i<mpls_original.get_nr_of_nodes();i++)
+    {
+        Graph<int> clone = mpls.clone();
+        clone.remove_node(i);
+
+        cout<<endl<<"Node "<<i+1<<" removed: "<<endl;
+
+        for(int k=0; k < clone.get_nr_of_nodes()-1; k++)
+        {
+            for(int l=k+1; l < clone.get_nr_of_nodes() ;l++)
+            {
+                if(k!=i && l!=i)
+                {
+                    vector<int> path{};
+                    clone.get_paths_between(k,l,path);
+                    if(path.empty())
+                    {
+                        nodeStats.add(true);
+                        cout<<"NO PATH FOUND between: "<<k+1<<"->"<<l+1<<" when node "<<i+1<<" removed!";
+                    }
+                    else
+                    {
+                        nodeStats.add(false);
+                        print_path(path);
+                    }
+                }
+            }
+        }
+    }
+
+    cout<<"Node outage stats: "<<nodeStats.get_stats()<<'%'<<endl<<endl;
 
     return 0;
 }

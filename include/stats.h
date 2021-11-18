@@ -1,3 +1,10 @@
+/**
+* @file stats.h
+* @Copyrigth Ericsson Ltd. © 2021
+* @author egon.csaba.osvath@ericsson.com
+*/
+
+
 #ifndef STATS_H_INCLUDED
 #define STATS_H_INCLUDED
 
