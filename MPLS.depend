@@ -39,13 +39,14 @@
 	<memory>
 	<graphviz/gvc.h>
 
-1637274308 source:/home/egon/Desktop/Ericsson/MPLS/main.cpp
+1644801140 source:/home/egon/Desktop/Ericsson/MPLS/main.cpp
 	<iostream>
 	"include/graph.h"
 	"include/stats.h"
 
-1637275558 /home/egon/Desktop/Ericsson/MPLS/include/graph.h
+1644801349 /home/egon/Desktop/Ericsson/MPLS/include/graph.h
 	<vector>
+	<stack>
 	<fstream>
 	<iostream>
 	<sstream>
@@ -55,6 +56,6 @@
 	"stats.h"
 	<graphviz/gvc.h>
 
-1637018155 /home/egon/Desktop/Ericsson/MPLS/include/stats.h
+1637275756 /home/egon/Desktop/Ericsson/MPLS/include/stats.h
 	<iostream>
 
