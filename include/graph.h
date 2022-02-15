@@ -311,7 +311,8 @@ C& getProtectedContainer(std::stack<T, C>& s)
 }
 
 template <typename T>
-void Graph<T>::get_paths_between(int i, int j,vector<vector<int>> &paths, stack<int> &&path, vector<bool> && seen)
+void Graph<T>::get_paths_between(int i, int j,vector<vector<int>> &paths,
+        stack<int> &&path, vector<bool> && seen)
 {
     path.push(i);
     seen[i]=true;
