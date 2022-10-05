@@ -1,6 +1,6 @@
 /**
 * @file main.cpp
-* @Copyrigth Ericsson Ltd. © 2021
+* @Copyrigth Ericsson Ltd. © 2021-2022
 * @author egon.csaba.osvath@ericsson.com
 */
 
@@ -8,6 +8,10 @@
 #include "include/graph.h"
 #include "include/stats.h"
 using namespace std;
+
+#include <fstream>
+
+ofstream fout("data/result.out");
 
 std::string replaceExt(std::string s, std::string newExt) {
 
@@ -32,9 +36,9 @@ std::string setSubDir(std::string s, std::string subDir) {
 inline void print_path(const vector <int> &path){
     for (int i:path)
     {
-        cout<<i+1<<' ';
+        fout<<i+1<<' ';
     }
-    cout<<endl;
+    fout<<endl;
 }
 
 int main(int argc, char *argv[])
@@ -49,6 +53,9 @@ int main(int argc, char *argv[])
     Graph<int> mpls_original(argv[1]);
     Graph<int> mpls = mpls_original.clone();
 
+    mpls.R_F_W(true);
+    mpls.print_graph_nexts();
+
     bool quiet = true;
     if(argc==3)
     {
@@ -58,80 +65,87 @@ int main(int argc, char *argv[])
         }
     }
     mpls_original.draw(replaceExt(argv[1],"png").c_str());
-    mpls.R_F_W(setSubDir(argv[1],"res/"));
-
-    cout<<mpls.get_secondary_stats()<<"%"<<endl;
-
-    mpls.print_graph_nexts();
 
     Statistics linkStats;
-    for(int i=0; i<mpls_original.get_nr_of_nodes()-1; i++)
+    for(int i=0; i<mpls_original.get_nr_of_nodes(); i++)
     {
-        for(int j=i+1; j<mpls_original.get_nr_of_nodes();j++)
+        for(int j=0; j<mpls_original.get_nr_of_nodes();j++)
         {
-            if(mpls.get_weight(i,j))
+            if(mpls_original.get_weight(i,j) && i!=j)
             {
-                Graph<int> clone = mpls.clone();
+                Graph<int> clone = mpls_original.clone();
                 clone.remove_link(i,j);
+                clone.R_F_W();
 
-                cout<<endl<<"Link "<<i+1<<"->"<<j+1<<" removed: "<<endl;
+                fout<<endl<<"Link "<<i+1<<"->"<<j+1<<" removed: "<<endl;
 
-                for(int k=0;k<clone.get_nr_of_nodes()-1;k++)
+                vector<int> tmp = mpls.remove_link_temporarily(i,j);
+
+                for(int k=0;k<clone.get_nr_of_nodes();k++)
                 {
-                    for(int l=k+1; l<clone.get_nr_of_nodes();l++)
+                    for(int l=0; l<clone.get_nr_of_nodes();l++)
                     {
-                        vector<int> path{};
-                        clone.get_paths_between(k, l, path);
-                        if(path.empty())
+                        if(k!=l)
                         {
-                            linkStats.add(true);
-                            cout<<"NO PATH FOUND between: "<<k+1<<"->"<<l+1<<" when link: "<<i+1<<"->"<<j+1<<" removed!";
-                        }
-                        else
-                        {
-                            linkStats.add(false);
-                            print_path(path);
+                            vector<int> path{};
+                            mpls.get_paths_between(k, l, path);
+                            fout<<endl;
+//                            if(path != clone.get_path(k,l))
+                            {
+                                print_path(path);
+                                print_path(clone.get_path(k,l));
+                                fout<<endl;
+                            }
                         }
                     }
                 }
+                mpls.restore_link(tmp,i,j);
             }
         }
     }
 
-    cout<<"Link outage stats: "<<linkStats.get_stats()<<"%"<<endl<<endl;
-
-    Statistics nodeStats;
-    for(int i=0;i<mpls_original.get_nr_of_nodes();i++)
-    {
-        Graph<int> clone = mpls.clone();
-        clone.remove_node(i);
-
-        cout<<endl<<"Node "<<i+1<<" removed: "<<endl;
-
-        for(int k=0; k < clone.get_nr_of_nodes()-1; k++)
-        {
-            for(int l=k+1; l < clone.get_nr_of_nodes() ;l++)
-            {
-                if(k!=i && l!=i)
-                {
-                    vector<int> path{};
-                    clone.get_paths_between(k,l,path);
-                    if(path.empty())
-                    {
-                        nodeStats.add(true);
-                        cout<<"NO PATH FOUND between: "<<k+1<<"->"<<l+1<<" when node "<<i+1<<" removed!";
-                    }
-                    else
-                    {
-                        nodeStats.add(false);
-                        print_path(path);
-                    }
-                }
-            }
-        }
-    }
-
-    cout<<"Node outage stats: "<<nodeStats.get_stats()<<'%'<<endl<<endl;
+//    fout<<"Link outage stats: "<<linkStats.get_stats()<<"%"<<endl<<endl;
+//
+//    Statistics nodeStats;
+//    try{
+//        for(int i=0; i<mpls_original.get_nr_of_nodes(); i++)
+//        {
+//            Graph<int> clone = mpls_original.clone();
+//            clone.remove_node(i);
+//            clone.R_F_W();
+//
+////            for()
+////
+////            int next = mpls.get_nexts_primary(i,j);
+////            mpls.set_nexts_primary(i,j,-1);
+//
+//
+//            fout<<endl<<"Node "<<i+1<<" removed: "<<endl;
+//
+//            for(int k=0;k<clone.get_nr_of_nodes();k++)
+//            {
+//                for(int l=0; l<clone.get_nr_of_nodes();l++)
+//                {
+//                    if(k!=i && l!=i && l!=k)
+//                    {
+//                        vector<int> path{};
+//                        mpls.get_paths_between(k, l, path);
+//                        if(path != clone.get_path(k,l))
+//                        {
+//                            print_path(path);
+//                            print_path(clone.get_path(k,l));
+//                            fout<<endl;
+//                        }
+//                    }
+//                }
+//            }
+//        }
+//    }
+//    catch (const std::exception& e)
+//    {
+//        cout<<e.what();
+//    }
+//    fout<<"Node outage stats: "<<nodeStats.get_stats()<<'%'<<endl<<endl;
 
     return 0;
 }

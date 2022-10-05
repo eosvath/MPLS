@@ -15,6 +15,8 @@
 #include <utility>
 #include <memory>
 #include <climits>
+#include <algorithm>
+#include <exception>
 
 #include "stats.h"
 
@@ -23,6 +25,8 @@ extern "C" {
 }
 
 using namespace std;
+
+extern ofstream fout;
 
 extern inline void print_path(const vector <int> &path);
 
@@ -34,8 +38,6 @@ class Graph
     */
     int _nr_of_nodes;
 
-    Statistics secondary_not_exist_stats;
-
     /***
     * Data member storing the distance (weights) between two adjacent nodes
     */
@@ -46,6 +48,12 @@ class Graph
     */
     vector<vector<int>> _nexts_primary;
     vector<vector<int>> _nexts_secondary;
+
+    /***
+    * Data member used to store the shortest paths between nodes
+    */
+    std::vector<std::vector<std::vector<int>>> _paths;
+
 
     /***
      *   member function used by R_F_W() to generate the contents of _paths data member when shortest distances and _nexts are caluculated by the modified Roy-Floyd-Warshall algorithm
@@ -91,7 +99,7 @@ public:
     * Roy-Floyd-Warshall algorithm, finding the shortest distances and paths in the current graph object.
     * Modifies, all data members except _nr_of_nodes.
     */
-    void R_F_W(string);
+    void R_F_W(bool secondaries = false);
     /***
     * Function returning the number of nodes in a graph.
     */
@@ -145,6 +153,41 @@ public:
     */
 //    template <typename T2>
 //    void friend check_changed_paths_TI_LFA(const Graph<T2> &graph1, const Graph<T2> &graph2, Statistics &stats, const bool &quiet);
+    void calculate_secondaries(const Graph<T>&);
+
+    vector<int> remove_link_temporarily(int i, int j){
+        vector<int> result;
+
+        for(int k = 0; k<_nr_of_nodes; ++k)
+        {
+            result.emplace_back(_nexts_primary[i][k]);
+        }
+        for(int k = 0; k<_nr_of_nodes; ++k)
+        {
+            result.emplace_back(_nexts_primary[j][k]);
+        }
+        for(int k = 0; k<_nr_of_nodes; ++k)
+        {
+            if(_nexts_primary[i][k] == j)
+            {
+                _nexts_primary[i][k] = -1;
+            }
+            if(_nexts_primary[j][k] == i)
+            {
+                _nexts_primary[j][k] = -1;
+            }
+        }
+        return result;
+    }
+
+    void restore_link(vector<int> tmp, int i, int j){
+        for(int k = 0; k<_nr_of_nodes; ++k){
+            _nexts_primary[i][k] = tmp[k];
+        }
+        for(int k = _nr_of_nodes; k<2*_nr_of_nodes; ++k){
+            _nexts_primary[j][k-_nr_of_nodes] = tmp[k];
+        }
+    }
 
     void get_paths_between_only_primary(int i, int j, vector<int> &path) const;
 
@@ -155,6 +198,11 @@ public:
     void print_same_paths() const;
 
     void draw(const char *fname) const;
+
+    const std::vector<int> &get_path(int i, int j)
+    {
+        return _paths[i][j];
+    }
 
     double get_secondary_stats();
 
@@ -181,11 +229,13 @@ Graph<T>::Graph(const char * input_file)
         _weights.resize(_nr_of_nodes);
         _nexts_primary.resize(_nr_of_nodes);
         _nexts_secondary.resize(_nr_of_nodes);
+        _paths.resize(_nr_of_nodes);
         for(int i=0; i<_nr_of_nodes; ++i)
         {
             _weights[i].resize(_nr_of_nodes);
             _nexts_primary[i].resize(_nr_of_nodes);
             _nexts_secondary[i].resize(_nr_of_nodes);
+            _paths.resize(_nr_of_nodes);
             for(int j=0; j<_nr_of_nodes; ++j)
             {
                 fin>>_weights[i][j];
@@ -222,16 +272,22 @@ Graph<T>::Graph(const char * input_file)
 template <typename T>
 Graph<T>::Graph(const Graph<T>& rhs)
 {
-    //cout<<"cpy-ctor\n";
+    //fout<<"cpy-ctor\n";
     _nr_of_nodes = rhs._nr_of_nodes;
     _weights.resize(_nr_of_nodes);
     _nexts_primary.resize(_nr_of_nodes);
     _nexts_secondary.resize(_nr_of_nodes);
+    _paths.resize(_nr_of_nodes);
     for(int i=0; i<_nr_of_nodes ; ++i)
     {
         _weights[i]=rhs._weights[i];
         _nexts_primary[i]=rhs._nexts_primary[i];
         _nexts_secondary[i]=rhs._nexts_secondary[i];
+        _paths[i].resize(rhs._paths[i].size());
+        for(int j=0; j<_paths[i].size() ; ++j)
+        {
+            _paths[i][j]=rhs._paths[i][j];
+        }
     }
 }
 
@@ -244,16 +300,21 @@ Graph<T> Graph<T>::clone() const
 template <typename T>
 Graph<T>::Graph(Graph<T>&& rhs) noexcept
 {
-    //cout<<"move-ctor\n";
+    //fout<<"move-ctor\n";
     _nr_of_nodes = move(rhs._nr_of_nodes);
     _weights.resize(_nr_of_nodes);
     _nexts_primary.resize(_nr_of_nodes);
     _nexts_secondary.resize(_nr_of_nodes);
+    _paths.resize(_nr_of_nodes);
     for(int i=0; i<_nr_of_nodes ; ++i)
     {
         _weights[i] = move(rhs._weights[i]);
         _nexts_primary[i] = move(rhs._nexts_primary[i]);
         _nexts_secondary[i] = move(rhs._nexts_secondary[i]);
+        for(int j=0; j<_paths[i].size() ; ++j)
+        {
+            _paths[i][j]=rhs._paths[i][j];
+        }
     }
 }
 
@@ -264,51 +325,56 @@ void Graph<T>::print_graph_dists() const
     {
         for(int j=0; j<_nr_of_nodes ; ++j)
         {
-            cout<<_weights[i][j]<<' ';
+            fout<<_weights[i][j]<<' ';
         }
-        cout<<endl;
+        fout<<endl;
     }
 }
 
 template <typename T>
 void Graph<T>::print_graph_nexts() const
 {
-    cout<<"Primary outgoing interfaces: "<<endl;
+    fout<<"Primary outgoing interfaces: "<<endl;
     for(int i=0; i<_nr_of_nodes ; ++i)
     {
         for(int j=0; j<_nr_of_nodes ; ++j)
         {
-            cout<<_nexts_primary[i][j]+1<<' ';
+            fout<<_nexts_primary[i][j]+1<<' ';
         }
-        cout<<endl;
+        fout<<endl;
     }
-    cout<<endl<<"Secondary outgoing interfaces: "<<endl;
+    fout<<endl<<"Secondary outgoing interfaces: "<<endl;
 
     for(int i=0; i<_nr_of_nodes ; ++i)
     {
         for(int j=0; j<_nr_of_nodes ; ++j)
         {
-            cout<<_nexts_secondary[i][j]+1<<' ';
+            fout<<_nexts_secondary[i][j]+1<<' ';
         }
-        cout<<endl;
+        fout<<endl;
     }
-    cout<<endl;
+    fout<<endl;
 }
 
 
 template <typename T>
 Graph<T>& Graph<T>:: operator=(const Graph<T>& rhs)
 {
-//    cout<<"cpy-assignment-op\n";
+//    fout<<"cpy-assignment-op\n";
     _nr_of_nodes = rhs._nr_of_nodes;
     _weights.resize(_nr_of_nodes);
     _nexts_primary.resize(_nr_of_nodes);
     _nexts_secondary.resize(_nr_of_nodes);
+    _paths.resize(_nr_of_nodes);
     for(int i=0; i<_nr_of_nodes ; ++i)
     {
         _weights[i] = rhs._weights[i];
         _nexts_primary[i] = rhs._nexts[i];
         _nexts_secondary[i] = rhs._nexts[i];
+        for(int j=0; j<_paths[i].size() ; ++j)
+        {
+            _paths[i][j]=rhs._paths[i][j];
+        }
     }
     return *this;
 }
@@ -316,26 +382,55 @@ Graph<T>& Graph<T>:: operator=(const Graph<T>& rhs)
 template <typename T>
 Graph<T>& Graph<T>:: operator=(Graph<T>&& rhs) noexcept
 {
-//    cout<<"move-assignment-op\n";
+//    fout<<"move-assignment-op\n";
     _nr_of_nodes = move(rhs._nr_of_nodes);
     _weights.resize(_nr_of_nodes);
     _nexts_primary.resize(_nr_of_nodes);
     _nexts_secondary.resize(_nr_of_nodes);
+    _paths.resize(_nr_of_nodes);
     for(int i=0; i<_nr_of_nodes ; ++i)
     {
         _weights[i] = move(rhs._weights[i]);
         _nexts_primary[i] = move(rhs._nexts_primary[i]);
         _nexts_secondary[i] = move(rhs._nexts_secondary[i]);
+        for(int j=0; j<_paths[i].size() ; ++j)
+        {
+            _paths[i][j]=rhs._paths[i][j];
+        }
     }
 
     return *this;
 }
 
+template <class T>
+void Graph<T>::get_paths()
+{
+    _paths.resize(_nr_of_nodes);
+    for(int i=0; i<_nr_of_nodes; ++i)
+    {
+        _paths[i].resize(_nr_of_nodes);
+        for(int j=0; j<_nr_of_nodes; ++j)
+        {
+            _paths[i][j].resize(0);
+            int k=i;
+            while(k!=j && _nexts_primary[k][j]>=0)
+            {
+                _paths[i][j].push_back(k);
+                k=_nexts_primary[k][j];
+            }
+            if(_nexts_primary[k][j]>=0)
+            {
+                _paths[i][j].push_back(k);
+            }
+        }
+    }
+}
+
 template <typename T>
-void Graph<T>::R_F_W(string in_path)
+void Graph<T>::R_F_W(bool secondaries)
 {
     Graph<int> clone_original(this->clone());
-    vector<vector<int>>weights=_weights;
+
     for (int k = 0; k < _nr_of_nodes; k++)
     {
         for (int i = 0; i < _nr_of_nodes; i++)
@@ -344,73 +439,50 @@ void Graph<T>::R_F_W(string in_path)
             {
                 if(i!=j&& k!=i)
                 {
-                    if ((weights[i][k] + weights[k][j] < weights[i][j] ||  !weights[i][j]) && (weights[i][k] && weights[k][j]))
+                    if ((_weights[i][k] + _weights[k][j] <= _weights[i][j] ||  !_weights[i][j]) && (_weights[i][k] && _weights[k][j]))
                     {
-                        weights[i][j] = weights[i][k] + weights[k][j];
+                        _weights[i][j] = _weights[i][k] + _weights[k][j];
                         _nexts_primary[i][j]=_nexts_primary[i][k];
                     }
                 }
             }
         }
     }
+    if(secondaries)
+    {
+        calculate_secondaries(clone_original);
+    }
 
+    get_paths();
+}
+
+template <typename T>
+void Graph<T>::calculate_secondaries(const Graph<T>& before_R_F_W)
+{
     for (int i = 0; i < _nr_of_nodes; i++)
     {
         for (int j = 0; j < _nr_of_nodes; j++)
         {
             if(i!=j)
             {
-                string path(in_path);
-                Graph<int> clone(clone_original.clone());
-                vector<int> shortest_path{};
-                get_paths_between_only_primary(i, j, shortest_path);
-                for(int l=0; l < shortest_path.size()-1; l++)
-                {
-                    if(l!=0)
-                    {
-                        clone.remove_node(shortest_path[l]);
-                    }
-                    clone.remove_link(shortest_path[l], shortest_path[l+1]);
-                }
-                vector<int> secondary(clone.dijkstra(i,j));
-                if(secondary.empty())
-                {
-                    clone = clone_original.clone();
-                    clone.remove_link(shortest_path[0], shortest_path[1]);
-                    secondary = clone.dijkstra(i,j);
-                    secondary_not_exist_stats.add(true);
-                }
-                else
-                {
-                    secondary_not_exist_stats.add(false);
-                }
-//                print_path(secondary);
-                if(!secondary.empty() && secondary.size() >= 2)
-                {
-                    _nexts_secondary[i][j] = secondary[1];
-                }
-//                else
+                Graph<int> clone(before_R_F_W.clone());
+                clone.remove_link(i, _nexts_primary[i][j]);
+
+                vector<int> secondary_to(clone.dijkstra(i,j));
+//                fout<<"Dijkstra "<<i+1<<"->"<<j+1<<":";
+//                for(auto p : secondary_to)
 //                {
-//                    cout<<"!!!BIG PROBLEM!!!"<<endl;
+//                    fout<<p+1<<" ";
 //                }
-//                stringstream ss;
-//                ss<<'_'<<i+1<<'_'<<j+1;
-//
-//                string::size_type index = path.rfind('.', path.length());
-//                if (index != string::npos)
-//                {
-//                    path.insert(index, ss.str());
-//                }
-//                clone.draw(path.c_str());
+//                fout<<endl;
+
+                if(!secondary_to.empty() && secondary_to.size() >= 2)
+                {
+                    _nexts_secondary[i][j] = secondary_to[1];
+                }
             }
         }
     }
-}
-
-template <typename T>
-double Graph<T>::get_secondary_stats()
-{
-    return secondary_not_exist_stats.get_stats();
 }
 
 // A utility function to find the
@@ -496,7 +568,7 @@ vector<int> Graph<T>::dijkstra(int src, int dest)
             // than current value of
             // dist[v]
             if (!sptSet[v] && _weights[u][v] &&
-                dist[u] + _weights[u][v] < dist[v])
+                dist[u] + _weights[u][v] <= dist[v])
             {
                 parent[v] = u;
                 dist[v] = dist[u] + _weights[u][v];
@@ -534,30 +606,46 @@ void Graph<T>::get_paths_between_only_primary(int i, int j, vector<int> &path) c
 template <class T>
 void Graph<T>::get_paths_between_secondary(int i, int j, vector<int> &path) const
 {
+    int top = -1;
+    if(path.size())
+    {
+        top = path.back();
+    }
     path.push_back(i);
+    fout<<i+1<<" ";
     if(i!=j)
     {
-        if(_nexts_secondary[_nexts_secondary[i][j]][j] != i)
+        if(_nexts_primary[i][j] == top || _nexts_primary[i][j] == -1 || top == -1)
         {
-            get_paths_between_secondary(_nexts_secondary[i][j], j, path);
+            get_paths_between_secondary(_nexts_secondary[i][j],j,path);
         }
         else
         {
-            get_paths_between(_nexts_secondary[i][j], j, path);
+            get_paths_between(_nexts_primary[i][j],j,path);
         }
+
+//        if(_nexts_secondary[_nexts_secondary[i][j]][j] != i)
+//        {
+//            get_paths_between_secondary(_nexts_secondary[i][j], j, path);
+//        }
+//        else
+//        {
+//            get_paths_between(_nexts_secondary[i][j], j, path);
+//        }
     }
 }
 
 template <class T>
 void Graph<T>::get_paths_between(int i, int j, vector<int> &path) const
 {
-    int last = -1;
-    if(path.size()>0)
+    int top = -1;
+    if(path.size())
     {
-        last = path.back();
+        top = path.back();
     }
 
     path.push_back(i);
+    fout<<i+1<<" ";
     if(i!=j)
     {
         if(_nexts_primary[i][j]!=-1)
@@ -566,14 +654,16 @@ void Graph<T>::get_paths_between(int i, int j, vector<int> &path) const
         }
         else
         {
-            if(_nexts_secondary[_nexts_secondary[i][j]][j] != i)
-            {
-                get_paths_between_secondary(_nexts_secondary[i][j], j, path);
-            }
-            else
-            {
-                get_paths_between(_nexts_secondary[i][j], j, path);
-            }
+            get_paths_between_secondary(_nexts_secondary[i][j],j,path);
+
+//            if(_nexts_secondary[_nexts_secondary[i][j]][j] != i)
+//            {
+//                get_paths_between_secondary(_nexts_secondary[i][j], j, path);
+//            }
+//            else
+//            {
+//                get_paths_between(_nexts_secondary[i][j], j, path);
+//            }
         }
     }
 }
@@ -585,24 +675,24 @@ void Graph<T>::print_paths() const
     {
         for (int j = i+1; j < _nr_of_nodes; j++)
         {
-            cout<<i+1<<"->"<<j+1<<endl;
+            fout<<i+1<<"->"<<j+1<<endl;
             std::vector<int> a{};
             get_paths_between_only_primary(i,j,a);
 
             for(int k : a)
             {
-                cout<<k+1<<' ';
+                fout<<k+1<<' ';
             }
-            cout<<endl;
+            fout<<endl;
 
             a.clear();
             get_paths_between_secondary(i,j,a);
 
             for(int k : a)
             {
-                cout<<k+1<<' ';
+                fout<<k+1<<' ';
             }
-            cout<<endl<<endl;
+            fout<<endl<<endl;
         }
     }
 }
@@ -624,9 +714,9 @@ void Graph<T>::print_same_paths() const
             {
                 for(int k : b)
                 {
-                    cout<<k+1<<' ';
+                    fout<<k+1<<' ';
                 }
-                cout<<endl<<endl;
+                fout<<endl<<endl;
             }
         }
     }
@@ -654,7 +744,9 @@ void Graph<T>::remove_node(int node)
     }
     else
     {
-        throw "Invalid node index to remove!";
+        std::ostringstream oss;
+        oss <<"Invalid node index to remove: "<< node;
+        throw runtime_error(oss.str());
     }
 }
 
@@ -678,7 +770,9 @@ void Graph<T>::remove_link(int node1, int node2)
     }
     else
     {
-        throw "Invalid node index in link to remove!";
+        std::ostringstream oss;
+        oss <<"Invalid node index in link to remove: "<< node1<<"->"<<node2<< " nr. of nodes: "<<_nr_of_nodes;
+        throw runtime_error(oss.str());
     }
 }
 
