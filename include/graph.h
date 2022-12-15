@@ -439,7 +439,7 @@ void Graph<T>::R_F_W(bool secondaries)
             {
                 if(i!=j&& k!=i)
                 {
-                    if ((_weights[i][k] + _weights[k][j] <= _weights[i][j] ||  !_weights[i][j]) && (_weights[i][k] && _weights[k][j]))
+                    if ((_weights[i][k] + _weights[k][j] < _weights[i][j] ||  !_weights[i][j]) && (_weights[i][k] && _weights[k][j]))
                     {
                         _weights[i][j] = _weights[i][k] + _weights[k][j];
                         _nexts_primary[i][j]=_nexts_primary[i][k];
@@ -478,7 +478,12 @@ void Graph<T>::calculate_secondaries(const Graph<T>& before_R_F_W)
 
                 if(!secondary_to.empty() && secondary_to.size() >= 2)
                 {
-                    _nexts_secondary[i][j] = secondary_to[1];
+                    int k = 0;
+                    while(k < secondary_to.size() && _nexts_primary[secondary_to[k]][j] != secondary_to[k+1])
+                    {
+                        _nexts_secondary[secondary_to[k]][j] = secondary_to[k+1];
+                        k++;
+                    }
                 }
             }
         }
@@ -499,7 +504,7 @@ int Graph<T>::minDistance(int dist[], bool sptSet[])
 
     for (int v = 0; v < _nr_of_nodes; v++)
     {
-        if (sptSet[v] == false && dist[v] <= min)
+        if (sptSet[v] == false && dist[v] < min)
         {
             min = dist[v];
             min_index = v;
@@ -568,7 +573,7 @@ vector<int> Graph<T>::dijkstra(int src, int dest)
             // than current value of
             // dist[v]
             if (!sptSet[v] && _weights[u][v] &&
-                dist[u] + _weights[u][v] <= dist[v])
+                dist[u] + _weights[u][v] < dist[v])
             {
                 parent[v] = u;
                 dist[v] = dist[u] + _weights[u][v];
@@ -612,10 +617,10 @@ void Graph<T>::get_paths_between_secondary(int i, int j, vector<int> &path) cons
         top = path.back();
     }
     path.push_back(i);
-    fout<<i+1<<" ";
+//    fout<<i+1<<" ";
     if(i!=j)
     {
-        if(_nexts_primary[i][j] == top || _nexts_primary[i][j] == -1 || top == -1)
+        if(_nexts_primary[i][j] == top || _nexts_primary[i][j] == -1)
         {
             get_paths_between_secondary(_nexts_secondary[i][j],j,path);
         }
@@ -645,7 +650,7 @@ void Graph<T>::get_paths_between(int i, int j, vector<int> &path) const
     }
 
     path.push_back(i);
-    fout<<i+1<<" ";
+//    fout<<i+1<<" ";
     if(i!=j)
     {
         if(_nexts_primary[i][j]!=-1)

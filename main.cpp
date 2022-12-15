@@ -11,7 +11,7 @@ using namespace std;
 
 #include <fstream>
 
-ofstream fout("data/result.out");
+ofstream fout("data/result3_link_protection_secondary_with_node.out");
 
 std::string replaceExt(std::string s, std::string newExt) {
 
@@ -66,85 +66,85 @@ int main(int argc, char *argv[])
     }
     mpls_original.draw(replaceExt(argv[1],"png").c_str());
 
-    Statistics linkStats;
-    for(int i=0; i<mpls_original.get_nr_of_nodes(); i++)
-    {
-        for(int j=0; j<mpls_original.get_nr_of_nodes();j++)
-        {
-            if(mpls_original.get_weight(i,j) && i!=j)
-            {
-                Graph<int> clone = mpls_original.clone();
-                clone.remove_link(i,j);
-                clone.R_F_W();
-
-                fout<<endl<<"Link "<<i+1<<"->"<<j+1<<" removed: "<<endl;
-
-                vector<int> tmp = mpls.remove_link_temporarily(i,j);
-
-                for(int k=0;k<clone.get_nr_of_nodes();k++)
-                {
-                    for(int l=0; l<clone.get_nr_of_nodes();l++)
-                    {
-                        if(k!=l)
-                        {
-                            vector<int> path{};
-                            mpls.get_paths_between(k, l, path);
-                            fout<<endl;
-//                            if(path != clone.get_path(k,l))
-                            {
-                                print_path(path);
-                                print_path(clone.get_path(k,l));
-                                fout<<endl;
-                            }
-                        }
-                    }
-                }
-                mpls.restore_link(tmp,i,j);
-            }
-        }
-    }
-
-//    fout<<"Link outage stats: "<<linkStats.get_stats()<<"%"<<endl<<endl;
-//
-//    Statistics nodeStats;
-//    try{
-//        for(int i=0; i<mpls_original.get_nr_of_nodes(); i++)
+//    Statistics linkStats;
+//    for(int i=0; i<mpls_original.get_nr_of_nodes(); i++)
+//    {
+//        for(int j=0; j<mpls_original.get_nr_of_nodes();j++)
 //        {
-//            Graph<int> clone = mpls_original.clone();
-//            clone.remove_node(i);
-//            clone.R_F_W();
-//
-////            for()
-////
-////            int next = mpls.get_nexts_primary(i,j);
-////            mpls.set_nexts_primary(i,j,-1);
-//
-//
-//            fout<<endl<<"Node "<<i+1<<" removed: "<<endl;
-//
-//            for(int k=0;k<clone.get_nr_of_nodes();k++)
+//            if(mpls_original.get_weight(i,j) && i!=j)
 //            {
-//                for(int l=0; l<clone.get_nr_of_nodes();l++)
+//                Graph<int> clone = mpls_original.clone();
+//                clone.remove_link(i,j);
+//                clone.R_F_W();
+//
+//                fout<<endl<<"Link "<<i+1<<"->"<<j+1<<" removed: "<<endl;
+//
+//                vector<int> tmp = mpls.remove_link_temporarily(i,j);
+//
+//                for(int k=0;k<clone.get_nr_of_nodes();k++)
 //                {
-//                    if(k!=i && l!=i && l!=k)
+//                    for(int l=0; l<clone.get_nr_of_nodes();l++)
 //                    {
-//                        vector<int> path{};
-//                        mpls.get_paths_between(k, l, path);
-//                        if(path != clone.get_path(k,l))
+//                        if(k!=l)
 //                        {
-//                            print_path(path);
-//                            print_path(clone.get_path(k,l));
-//                            fout<<endl;
+//                            vector<int> path{};
+//                            mpls.get_paths_between(k, l, path);
+////                            fout<<endl;
+//                            if(path != clone.get_path(k,l))
+//                            {
+//                                print_path(path);
+//                                print_path(clone.get_path(k,l));
+//                                fout<<endl;
+//                            }
 //                        }
 //                    }
 //                }
+//                mpls.restore_link(tmp,i,j);
 //            }
 //        }
 //    }
-//    catch (const std::exception& e)
-//    {
-//        cout<<e.what();
-//    }
+//
+//    fout<<"Link outage stats: "<<linkStats.get_stats()<<"%"<<endl<<endl;
+
+//    Statistics nodeStats;
+    try{
+        for(int i=0; i<mpls_original.get_nr_of_nodes(); i++)
+        {
+            Graph<int> clone = mpls_original.clone();
+            clone.remove_node(i);
+            clone.R_F_W();
+
+//            for()
+//
+//            int next = mpls.get_nexts_primary(i,j);
+//            mpls.set_nexts_primary(i,j,-1);
+
+
+            fout<<endl<<"Node "<<i+1<<" removed: "<<endl;
+
+            for(int k=0;k<clone.get_nr_of_nodes();k++)
+            {
+                for(int l=0; l<clone.get_nr_of_nodes();l++)
+                {
+                    if(k!=i && l!=i && l!=k)
+                    {
+                        vector<int> path{};
+                        mpls.get_paths_between(k, l, path);
+                        if(path != clone.get_path(k,l))
+                        {
+                            print_path(path);
+                            print_path(clone.get_path(k,l));
+                            fout<<endl;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    catch (const std::exception& e)
+    {
+        cout<<e.what();
+    }
 //    fout<<"Node outage stats: "<<nodeStats.get_stats()<<'%'<<endl<<endl;
 
     return 0;
